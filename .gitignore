@@ -1,0 +1,11 @@
+# MATLAB/Simulink generated files
+*.asv
+*.m~
+slprj/
+codegen/
+*.mex*
+
+# Editor and OS files
+.vscode/
+.DS_Store
+Thumbs.db
