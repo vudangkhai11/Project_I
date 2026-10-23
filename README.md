@@ -18,6 +18,8 @@ Hệ thống mô phỏng sử dụng hai anten phát và hai anten thu (MIMO 2×
 
 Kênh được giữ cố định trong một frame và tạo lại độc lập giữa các frame. CP dài hơn số tap kênh, nên sau khi bỏ CP và thực hiện FFT, có thể mô hình hóa tín hiệu riêng trên từng sóng mang con. Trên sóng mang con thứ $k$, mô hình tín hiệu là $\mathbf{y}[k]=\mathbf{H}[k]\mathbf{x}[k]+\mathbf{n}[k]$, trong đó $\mathbf{x}[k]$ là vector tín hiệu phát, $\mathbf{H}[k]$ là ma trận kênh, và $\mathbf{n}[k]$ là vector nhiễu.
 
+Trong chương trình, SNR được đặt theo tỉ số công suất tín hiệu mẫu ở đầu vào kênh trên công suất AWGN phức ở đầu vào kênh: $\mathrm{SNR}=P_{signal}/P_{noise}$. Giá trị dB được đổi sang tuyến tính trước khi tạo nhiễu. Sau FFT và cân bằng ZF, phương sai nhiễu được tính theo từng luồng và từng sóng mang con để tạo LLR cho giải mã mềm. Đường BER tham chiếu dùng cùng quy ước SNR đầu vào; $\gamma$ trong xấp xỉ BER 16-QAM là SNR ký hiệu sau ZF.
+
 Bộ thu được giả định biết chính xác ma trận kênh (CSI hoàn hảo) và dùng cân bằng Zero-Forcing (ZF) trên từng sóng mang con để ước lượng tín hiệu phát: $\hat{\mathbf{x}}[k]=(\mathbf{H}^{H}[k]\mathbf{H}[k])^{-1}\mathbf{H}^{H}[k]\mathbf{y}[k]$. Tín hiệu ước lượng sau đó được giải điều chế mềm và đưa vào bộ giải mã Turbo.
 
 ## 4. Mã hóa và giải mã Turbo
@@ -34,7 +36,7 @@ Bộ giải điều chế 16-QAM cung cấp LLR mềm: với mỗi bit, giá tr�
 
 Mỗi decoder xét trellis gồm 8 trạng thái có thể có của thanh ghi. BCJR tính điểm cho các đường đi qua trellis bằng cách kết hợp thông tin nhận được với quy tắc chuyển trạng thái của bộ mã. Phiên bản Max-Log-MAP xấp xỉ phép tính tổng trên các đường đi bằng cách chỉ giữ đường có điểm lớn nhất. Từ các điểm này, decoder tạo LLR hậu nghiệm cho từng bit rồi trừ đi thông tin hệ thống và thông tin tiên nghiệm đã nhận; phần còn lại gọi là thông tin ngoại lai (extrinsic information), tức thông tin mới rút ra từ parity và cấu trúc trellis.
 
-Hai decoder trao đổi thông tin ngoại lai lặp đi lặp lại: decoder thứ nhất xử lý thứ tự ban đầu, thông tin của nó được đan xen để decoder thứ hai xử lý thứ tự đã đan xen; thông tin trả về được giải đan xen rồi đưa lại cho decoder thứ nhất. Mô phỏng thực hiện 6 vòng lặp và quyết định bit cuối cùng từ LLR kết hợp sau vòng lặp. Vì encoder không phát tail bits, decoder không giả định một trạng thái trellis kết thúc cố định.
+Hai decoder trao đổi thông tin ngoại lai lặp đi lặp lại: decoder thứ nhất xử lý thứ tự ban đầu, thông tin của nó được đan xen để decoder thứ hai xử lý thứ tự đã đan xen; thông tin trả về được giải đan xen rồi đưa lại cho decoder thứ nhất. Mô phỏng đo BER sau 2, 6 và 8 vòng lặp, với quyết định bit từ LLR kết hợp cuối cùng. Vì encoder không phát tail bits, decoder không giả định một trạng thái trellis kết thúc cố định.
 
 ## 5. Tham số mô phỏng
 
@@ -49,8 +51,8 @@ Các giá trị mặc định được khai báo trong `config_params.m`.
 | Số tap kênh, $L$ | 10 | Số tap của kênh Rayleigh đa đường |
 | Điều chế, $M$ | 16 | 16-QAM, tương đương 4 bit trên mỗi symbol |
 | Bit thông tin mỗi frame, $K_{info}$ | 160 | Số bit đầu vào bộ mã Turbo |
-| Số vòng giải mã Turbo | 6 | Số lần trao đổi thông tin giữa hai decoder |
-| Số frame mỗi mức SNR | 200 | Số frame dùng để tính BER/SER mô phỏng |
+| Số vòng giải mã Turbo | 2, 6, 8 | Các số vòng được so sánh |
+| Số frame mỗi mức SNR | 200 | Số frame dùng để tính BER mô phỏng |
 | Dải SNR | 0:2:20 dB | Các mức SNR từ 0 đến 20 dB, bước 2 dB |
 | Số mẫu kênh tham chiếu, $N_{theory}$ | 200.000 | Số mẫu dùng tính đường tham chiếu lý thuyết |
 | Seed ngẫu nhiên | 2026 | Giúp tái lập chuỗi ngẫu nhiên của mô phỏng |
@@ -65,7 +67,7 @@ $$\mathrm{BER}_{post}=\frac{\text{số bit thông tin giải mã sai}}{\text{t�
 
 Mô phỏng chạy 200 frame tại mỗi mức SNR; mỗi frame có 160 bit thông tin, tương đương 32.000 bit được đánh giá cho một điểm SNR. BER sau giải mã được so sánh với đường tham chiếu lý thuyết của hệ thống 16-QAM không mã hóa dùng ZF trên kênh Rayleigh 2×2. Đường tham chiếu được tính bằng xấp xỉ lý thuyết và lấy trung bình trên 200.000 mẫu kênh.
 
-Chương trình cũng ghi BER trước giải mã và SER để hỗ trợ kiểm tra kết quả. SER sau giải mã được tính bằng cách mã hóa lại các bit đã giải mã, điều chế lại rồi so sánh với các symbol mã hóa đã truyền; vì vậy đây là SER trên luồng mã hóa, không phải SER của bit thông tin.
+Chương trình hiện ghi BER lý thuyết tham chiếu và BER sau giải mã Turbo cho từng số vòng lặp. Với 200 frame và 160 bit thông tin mỗi frame, mỗi điểm BER sau giải mã dựa trên 32.000 bit thông tin.
 
 ## 7. Cấu trúc chương trình
 
@@ -73,17 +75,16 @@ Chương trình cũng ghi BER trước giải mã và SER để hỗ trợ kiể
 |---|---|
 | `main.m` | Điểm bắt đầu: nạp cấu hình, chạy mô phỏng và vẽ biểu đồ. |
 | `config_params.m` | Khai báo tham số mặc định và kiểm tra các điều kiện kích thước. |
-| `run_simulation.m` | Quét các mức SNR, chạy nhiều frame và tổng hợp BER/SER. |
+| `run_simulation.m` | Quét các mức SNR, chạy nhiều frame và tổng hợp BER theo số vòng Turbo. |
 | `simulate_frame.m` | Thực hiện một frame từ sinh bit, truyền qua kênh, thu nhận đến giải mã và đếm lỗi. |
 | `turbo_stage.m` | Mã hóa Turbo và giải mã lặp Max-Log-MAP BCJR. |
 | `qam16_stage.m` | Điều chế 16-QAM, quyết định cứng và tính LLR mềm. |
 | `ofdm_stage.m` | Thực hiện IFFT/FFT và thêm/bỏ tiền tố chu kỳ. |
 | `channel_stage.m` | Mô phỏng kênh Rayleigh đa đường và nhiễu AWGN. |
 | `mimo_zf_stage.m` | Cân bằng Zero-Forcing trên từng sóng mang con. |
-| `analysis_stage.m` | Tính đường tham chiếu lý thuyết và vẽ biểu đồ BER/SER. |
+| `analysis_stage.m` | Tính đường BER tham chiếu và vẽ biểu đồ BER. |
 | `docs/images/turbo.jpg` | Sơ đồ khối hệ thống dùng trong README. |
-| `docs/images/BER_result.png` | Biểu đồ BER theo SNR. |
-| `docs/images/SER_result.png` | Biểu đồ SER theo SNR. |
+| `docs/images/ket_qua.png` | Biểu đồ BER với các mức lặp Turbo. |
 
 Luồng chạy bắt đầu từ `main.m`, sau đó `run_simulation.m` gọi `simulate_frame.m` cho từng frame và mức SNR. Các khối điều chế, OFDM, kênh, cân bằng và Turbo được thực hiện bởi các file stage tương ứng.
 
@@ -93,7 +94,7 @@ Luồng chạy bắt đầu từ `main.m`, sau đó `run_simulation.m` gọi `si
 
 1. Mở MATLAB và đặt thư mục `github_modular` làm Current Folder.
 2. Mở `main.m` hoặc nhập `main` vào Command Window.
-3. Chờ chương trình chạy hết các mức SNR. BER/SER sẽ được in trong Command Window; sau đó chương trình mở các biểu đồ BER và SER.
+3. Chờ chương trình chạy hết các mức SNR. BER tham chiếu và BER sau giải mã với 2, 6, 8 vòng lặp sẽ được in trong Command Window; sau đó chương trình mở biểu đồ BER.
 
 ### MATLAB Online
 
@@ -103,18 +104,8 @@ Luồng chạy bắt đầu từ `main.m`, sau đó `run_simulation.m` gọi `si
 
 Giữ các file `.m` cùng thư mục để MATLAB tìm thấy các hàm mô phỏng.
 
-## 9. Kết quả và nhận xét
+## 9. Kết quả
 
-### BER theo SNR
+Biểu đồ dưới đây so sánh BER tham chiếu của ZF không mã hóa với BER sau giải mã Turbo tại 2, 6 và 8 vòng lặp.
 
-![Kết quả BER theo SNR](docs/images/BER_result.png)
-
-BER sau giải mã Turbo giảm rõ rệt khi SNR tăng. Trên kết quả này, BER sau giải mã giảm từ khoảng $1.4\times10^{-1}$ tại 6 dB xuống khoảng $3.7\times10^{-2}$ tại 8 dB và $2.4\times10^{-3}$ tại 10 dB. Từ khoảng 6 dB trở lên, đường BER sau giải mã thấp hơn đường tham chiếu lý thuyết không mã hóa, cho thấy mã Turbo cải thiện hiệu năng trong vùng SNR đó.
-
-### SER theo SNR
-
-![Kết quả SER theo SNR](docs/images/SER_result.png)
-
-SER sau giải mã cũng giảm nhanh khi SNR tăng. Chỉ số này được tính trên chuỗi symbol mã hóa sau khi giải mã rồi mã hóa và điều chế lại; BER sau giải mã vẫn là chỉ số chính để đánh giá độ chính xác của dữ liệu thông tin.
-
-Ở các mức SNR cao hơn 10 dB, đường sau giải mã không hiển thị trên biểu đồ. Với 200 frame mỗi mức SNR, điều này có thể xảy ra khi không ghi nhận lỗi trong số bit/symbol mô phỏng; trục logarit không thể biểu diễn giá trị 0. Vì vậy, kết quả này không khẳng định xác suất lỗi thực tế bằng 0; cần tăng số frame để khảo sát sâu hơn vùng SNR cao.
+![Kết quả BER theo SNR](docs/images/ket_qua.png)

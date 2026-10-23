@@ -24,7 +24,7 @@ if cfg.Ncoded > cfg.bits_per_ofdm
     error('Ncoded > bits_per_ofdm: reduce K_info or increase N.');
 end
 cfg.bits_pad = cfg.bits_per_ofdm - cfg.Ncoded;
-cfg.nIter = 6;
+cfg.iter_list = [2 6 8];
 cfg.Ntheory = 200000;
 cfg.seed = 2026;
 end

@@ -10,23 +10,25 @@ txTimeCp = ofdm_stage('mod', txFreq, cfg);
 rxFreq = ofdm_stage('demod', rxTime, cfg);
 [rxSyms, noiseEnh] = mimo_zf_stage('detect', rxFreq, Hfreq, cfg);
 rxSymsVec = rxSyms(:);
+% Bù hệ số chuẩn hóa 1/sqrt(nTx) đã áp dụng ở máy phát.
+rxSymsVec = rxSymsVec * sqrt(cfg.nTx);
 txSymsUsed = txSymsAll(1:cfg.Ns_used);
 rxSymsUsed = rxSymsVec(1:cfg.Ns_used);
 
-rxSymsHd = qam16_stage('hard', rxSymsUsed);
-stats.sym_err_pre = sum(rxSymsHd ~= txSymsUsed);
 stats.bit_tot = cfg.K_info;
 sigma2Rx = cfg.N * noisePowerTime;
-noiseVarSym = [sigma2Rx * noiseEnh(:, 1); sigma2Rx * noiseEnh(:, 2)];
+% Phương sai sau ZF và sau khi tín hiệu được nhân sqrt(nTx).
+noiseVarSym = cfg.nTx * sigma2Rx * ...
+    [noiseEnh(:, 1); noiseEnh(:, 2)];
 [~, llrVec] = qam16_stage('llr', rxSymsUsed, noiseVarSym(1:cfg.Ns_used));
 Lsys = llrVec(1:cfg.K_info);
 Lp1 = llrVec(cfg.K_info+1:2*cfg.K_info);
 Lp2 = llrVec(2*cfg.K_info+1:3*cfg.K_info);
-stats.bit_err_pre = sum((Lsys < 0) ~= infoBits);
+stats.bit_err_post = zeros(numel(cfg.iter_list), 1);
 
-decBits = turbo_stage('decode', Lsys, Lp1, Lp2, pi, invpi, cfg.nIter);
-stats.bit_err_post = sum(decBits ~= infoBits);
-codedHat = turbo_stage('encode', decBits, pi);
-symsHat = qam16_stage('mod', [codedHat; zeros(cfg.bits_pad, 1)]);
-stats.sym_err_post = sum(symsHat(1:cfg.Ns_used) ~= txSymsUsed);
+for iIter = 1:numel(cfg.iter_list)
+    decBits = turbo_stage('decode', Lsys, Lp1, Lp2, ...
+        pi, invpi, cfg.iter_list(iIter));
+
+    stats.bit_err_post(iIter) = sum(decBits ~= infoBits);
 end
