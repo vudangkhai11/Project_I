@@ -141,11 +141,11 @@ $$L_{post,k}=\ln\frac{P(u_k=0\mid\mathbf{y})}{P(u_k=1\mid\mathbf{y})}.$$
 
 Nếu tính BCJR MAP chính xác, mỗi xác suất ở tử và mẫu được cộng trên tất cả đường đi trellis tương ứng. Trong miền log, phép cộng xác suất đó trở thành phép `log-sum-exp`:
 
-$$\operatorname{LSE}(a,b)=\ln(e^a+e^b).$$
+$$\mathrm{LSE}(a,b)=\ln(e^a+e^b).$$
 
 Implementation trong `turbo_stage.m` là **Max-Log-MAP**, nên nó không tính riêng $P(u_k=0\mid\mathbf{y})$ và $P(u_k=1\mid\mathbf{y})$, cũng không chạy `log` trên hai xác suất đã tính. Thay vì `log-sum-exp`, nó dùng
 
-$$\operatorname{LSE}(a,b)\approx\max(a,b),$$
+$$\mathrm{LSE}(a,b)\approx\max(a,b),$$
 
 ở các đệ quy forward, backward và khi gom metric nhánh. Vì thế `Lpost` là hiệu giữa metric lớn nhất của các đường có bit 0 và metric lớn nhất của các đường có bit 1. Đây là **xấp xỉ log tỉ số xác suất hậu nghiệm**, không phải LLR MAP chính xác. Cả hai vẫn là LLR theo vai trò và quy ước dấu; chúng khác ở cách xấp xỉ các phép cộng xác suất.
 
