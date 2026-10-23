@@ -40,6 +40,41 @@ $$L(b)=\ln\frac{P(b=0\mid y)}{P(b=1\mid y)}.$$
 
 Vì vậy, LLR dương nghiêng về bit 0, LLR âm nghiêng về bit 1, và độ lớn $|L|$ thể hiện mức độ tin cậy. Quy ước này được dùng xuyên suốt `rsc_bcjr_maxlog`: quyết định cứng là `L < 0` cho bit 1.
 
+#### Ví dụ cụ thể: một symbol 16-QAM tạo ra 4 LLR
+
+Một symbol 16-QAM mang đúng 4 bit. Trong `qam16_stage.m`, thứ tự nhãn bit là $[b_1,b_2,b_3,b_4]$: hai bit đầu chọn mức trục I, hai bit sau chọn mức trục Q. Ví dụ bit `0101` được ánh xạ thành
+
+$$I=+1,\quad Q=+1,\quad x=\frac{1+j}{\sqrt{10}}\approx0.3162+0.3162j.$$
+
+Giả sử sau kênh và cân bằng, symbol thu là $y=0.2+0.6j$, và phương sai nhiễu phức mà bộ thu đưa cho giải điều chế là $\sigma^2=0.2$. Do nhiễu, $y$ không trùng chính xác với điểm phát. Với mỗi vị trí bit $b_j$, chia 16 điểm chòm sao thành nhóm bit bằng 0 và nhóm bit bằng 1, rồi tính khoảng cách bình phương nhỏ nhất:
+
+$$d_0(j)=\min_{x:\,b_j(x)=0}|y-x|^2,\qquad d_1(j)=\min_{x:\,b_j(x)=1}|y-x|^2.$$
+
+Code dùng xấp xỉ Max-Log để tính trực tiếp LLR, không tạo hai xác suất riêng:
+
+$$L(b_j)\approx\frac{d_1(j)-d_0(j)}{\sigma^2}.$$
+
+Ví dụ với bit $b_1$, điểm gần nhất trong nhóm $b_1=0$ là điểm nhãn `0101`, tức $x_0=(1+j)/\sqrt{10}$. Điểm gần nhất trong nhóm $b_1=1$ là `1101`, tức $x_1=(-1+j)/\sqrt{10}$. Do đó
+
+$$d_0(1)=|y-x_0|^2\approx0.0940,\qquad d_1(1)=|y-x_1|^2\approx0.3470,$$
+
+$$L(b_1)\approx\frac{0.3470-0.0940}{0.2}=+1.2649.$$
+
+LLR dương nên quyết định cứng cho $b_1$ là 0. Lặp phép tính tương tự cho cả bốn vị trí:
+
+| Bit | Điểm gần nhất trong nhóm bit 0 | $d_0$ | Điểm gần nhất trong nhóm bit 1 | $d_1$ | LLR $(d_1-d_0)/0.2$ | Quyết định cứng |
+|---|---|---:|---|---:|---:|---:|
+| $b_1$ | `0101` | 0.0940 | `1101` | 0.3470 | +1.2649 | 0 |
+| $b_2$ | `0001` | 0.6411 | `0101` | 0.0940 | -2.7351 | 1 |
+| $b_3$ | `0101` | 0.0940 | `0111` | 0.8530 | +3.7947 | 0 |
+| $b_4$ | `0100` | 0.1351 | `0101` | 0.0940 | -0.2053 | 1 |
+
+Vậy một symbol thu này tạo ra vector LLR xấp xỉ $[1.2649,-2.7351,3.7947,-0.2053]$, và quyết định cứng là `0101`. Kết quả phù hợp với symbol phát trong ví dụ, nhưng độ tin cậy của từng bit khác nhau: $b_3$ có LLR lớn nên khá chắc chắn; $b_4$ có LLR gần 0 nên còn thiếu chắc chắn.
+
+Trong code, 16 điểm chòm sao được lưu ở `const_points`; `d2` chứa $|y-x|^2$ từ symbol thu đến từng điểm. Với mỗi cột bit `j`, `mask0` và `mask1` chọn hai nhóm điểm, `min(...)` tìm $d_0,d_1$, rồi dòng `llr(:,j) = (d1 - d0) ./ noiseVarSym` tính LLR. Đây là Max-Log: mỗi nhóm chỉ giữ điểm gần nhất, xấp xỉ tổng likelihood của toàn nhóm. Với một symbol, thao tác này lặp bốn lần nên cho bốn LLR.
+
+Trong cấu hình project, 128 symbol 16-QAM trên hai luồng tạo $128\times4=512$ LLR cho toàn frame. 480 LLR đầu tương ứng với 160 bit hệ thống và hai chuỗi parity; 32 LLR còn lại là padding và không đưa vào Turbo decoder.
+
 Với $K=160$, chuỗi phát gồm ba phần dài $K$: bit hệ thống $u_k$, parity của encoder thứ nhất $p^{(1)}_k$, và parity của encoder thứ hai $p^{(2)}_k$. Bộ thu đưa ba chuỗi LLR tương ứng vào decoder:
 
 $$L_{sys,k},\qquad L_{p1,k},\qquad L_{p2,k}.$$
@@ -98,7 +133,25 @@ $$L_{e,k}=L_{post,k}-L_{sys,k}-L_{a,k}.$$
 
 Thông tin ngoại lai là phần mới decoder rút ra từ parity và ràng buộc trellis sau khi loại hai nguồn thông tin đã biết. Công thức tách này là lý do dấu LLR, cách dựng metric nhánh và phép quyết định phải thống nhất.
 
-#### 4.2.5. Trao đổi giữa hai decoder và một vòng lặp
+#### 4.2.5. LLR có còn là log tỉ số xác suất sau BCJR không?
+
+Có về ý nghĩa, nhưng cần phân biệt **định nghĩa xác suất** với **cách chương trình tính**. Với toàn bộ quan sát $\mathbf{y}$ và mã trellis, LLR hậu nghiệm chính xác của bit $u_k$ được định nghĩa là
+
+$$L_{post,k}=\ln\frac{P(u_k=0\mid\mathbf{y})}{P(u_k=1\mid\mathbf{y})}.$$
+
+Nếu tính BCJR MAP chính xác, mỗi xác suất ở tử và mẫu được cộng trên tất cả đường đi trellis tương ứng. Trong miền log, phép cộng xác suất đó trở thành phép `log-sum-exp`:
+
+$$\operatorname{LSE}(a,b)=\ln(e^a+e^b).$$
+
+Implementation trong `turbo_stage.m` là **Max-Log-MAP**, nên nó không tính riêng $P(u_k=0\mid\mathbf{y})$ và $P(u_k=1\mid\mathbf{y})$, cũng không chạy `log` trên hai xác suất đã tính. Thay vì `log-sum-exp`, nó dùng
+
+$$\operatorname{LSE}(a,b)\approx\max(a,b),$$
+
+ở các đệ quy forward, backward và khi gom metric nhánh. Vì thế `Lpost` là hiệu giữa metric lớn nhất của các đường có bit 0 và metric lớn nhất của các đường có bit 1. Đây là **xấp xỉ log tỉ số xác suất hậu nghiệm**, không phải LLR MAP chính xác. Cả hai vẫn là LLR theo vai trò và quy ước dấu; chúng khác ở cách xấp xỉ các phép cộng xác suất.
+
+Điều này cũng giải thích vì sao LLR sau decoder khác LLR giải điều chế. LLR đầu vào biểu diễn bằng chứng từ symbol thu; BCJR kết hợp bằng chứng đó với parity, trạng thái trellis hợp lệ và thông tin tiên nghiệm từ decoder kia để tạo một ước lượng hậu nghiệm mới. Nó vẫn đo tỉ số độ tin cậy cho cùng bit, nhưng dựa trên nhiều thông tin hơn. Trong mã, bộ giải điều chế cũng dùng Max-Log khi lấy khoảng cách gần nhất mỗi nhóm điểm 16-QAM; do đó cả LLR mềm đầu vào lẫn BCJR đều là các xấp xỉ log-likelihood.
+
+#### 4.2.6. Trao đổi giữa hai decoder và một vòng lặp
 
 Mã khởi tạo tiên nghiệm cho decoder 1 bằng 0: `La1 = zeros(K,1)`. Mỗi **vòng lặp Turbo** trong `turbo_decode_maxlog` gồm đủ hai lần chạy BCJR:
 
@@ -121,7 +174,7 @@ Decoder 2: Lsys(pi), Lp2, La2 -> Le2_i
 
 Hai decoder không gửi lại toàn bộ LLR hậu nghiệm; chúng trao đổi phần ngoại lai để thông tin hệ thống không bị đếm lặp như thể là quan sát mới. Tăng số vòng cho decoder thêm cơ hội dùng parity của nhánh kia, nhưng cũng tăng thời gian tính toán.
 
-#### 4.2.6. Quyết định bit và ý nghĩa số vòng
+#### 4.2.7. Quyết định bit và ý nghĩa số vòng
 
 Sau vòng lặp cuối, mã hiện tại kết hợp LLR thành phần hệ thống với thông tin trao đổi và thông tin ngoại lai của decoder 1:
 
