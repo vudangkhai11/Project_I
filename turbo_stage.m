@@ -1,4 +1,4 @@
-﻿function varargout = turbo_stage(action, varargin)
+function varargout = turbo_stage(action, varargin)
 %TURBO_STAGE Encode or decode the rate~1/3 RSC Turbo code.
 switch lower(action)
     case 'encode'
@@ -22,36 +22,41 @@ end
 
 
 
-function uhat = turbo_decode_maxlog(Lsys, Lp1, Lp2, pi, invpi, nIter)
-% Max-Log-MAP turbo decoder for RSC(13,15), no termination (simplified)
-    K = length(Lsys);
-    Lsys = Lsys(:); Lp1 = Lp1(:); Lp2 = Lp2(:);
+function uhat = turbo_decode_maxlog(Lsys, Lp1, Lp2, pi, invpi, iterList)
+% Max-Log-MAP turbo decoder cho phep truyen vao 1 so hoac 1 mang cac moc vong lap (vd: [2 6 8])
+K = length(Lsys);
+Lsys = Lsys(:); Lp1 = Lp1(:); Lp2 = Lp2(:);
+Lsys_i = Lsys(pi);
 
-    Lsys_i = Lsys(pi);
+La1 = zeros(K,1);
+Le1 = zeros(K,1);
 
-    La1 = zeros(K,1);
-    Le1 = zeros(K,1);
+maxIter = max(iterList);
+uhat = zeros(K, numel(iterList)); % Luu ket qua ung voi tung moc vong lap
 
-    for it = 1:nIter
-        % Decoder 1
-        [~, Le1] = rsc_bcjr_maxlog(Lsys, Lp1, La1);
+for it = 1:maxIter
+    % Decoder 1
+    [~, Le1] = rsc_bcjr_maxlog(Lsys, Lp1, La1);
 
-        % Interleave extrinsic -> a priori for decoder 2
-        La2 = Le1(pi);
+    % Interleave extrinsic -> a priori cho Decoder 2
+    La2 = Le1(pi);
 
-        % Decoder 2 (on interleaved sequence)
-        [~, Le2_i] = rsc_bcjr_maxlog(Lsys_i, Lp2, La2);
+    % Decoder 2 (tren chuoi da dan xen)
+    [~, Le2_i] = rsc_bcjr_maxlog(Lsys_i, Lp2, La2);
 
-        % Deinterleave extrinsic back
-        Le2 = Le2_i(invpi);
+    % Deinterleave extrinsic tro lai
+    Le2 = Le2_i(invpi);
 
-        % Feedback as new a priori
-        La1 = Le2;
+    % Cap nhat a priori cho vong tiep theo
+    La1 = Le2;
+
+    % KIEM TRA: Neu vong lap hien tai nam trong danh sach moc can luu
+    idx = find(iterList == it);
+    if ~isempty(idx)
+        L_final = Lsys + La1 + Le1;
+        uhat(:, idx) = (L_final < 0);
     end
-
-    % Final LLR (common practice)
-    L_final = Lsys + La1 + Le1;
-    uhat = (L_final < 0);
+end
 end
 
 
