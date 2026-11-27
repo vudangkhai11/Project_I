@@ -100,5 +100,4 @@ Khi tùy chỉnh phép chạy, có thể đặt lại `cfg.snr_db`, `cfg.N_sym` 
 
 ## Hướng phát triển
 
-- Khảo sát các dạng sóng OTFS và AFDM trong kênh có dịch Doppler.
-- Bổ sung pilot và nội suy theo thời gian–tần số để đánh giá ảnh hưởng của sai số ước lượng kênh.
+
