@@ -30,7 +30,7 @@ disp(results.BER_post);
 
 ## Mô hình hệ thống
 
-![Sơ đồ hệ thống MIMO-OFDM với mã Turbo](docs/images/turbo.jpg)
+![Sơ đồ hệ thống MIMO-OFDM với mã Turbo](docs/images/kk.png)
 
 | Tham số | Giá trị trong mã hiện tại |
 | --- | --- |
