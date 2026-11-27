@@ -33,7 +33,6 @@ for iSNR = 1:numel(cfg.snr_db)
         snrDb, ber_zf(iSNR), ber_mmse(iSNR));
 end
 
-% Vẽ đồ thị so sánh ZF vs MMSE
 figure('Color', 'w', 'Position', [100, 100, 750, 480]);
 semilogy(cfg.snr_db, ber_zf, 'r-o', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'ZF Equalizer (Turbo 6 iters)');
 hold on;

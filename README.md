@@ -30,17 +30,7 @@ disp(results.BER_post);
 
 ## Mô hình hệ thống
 
-```mermaid
-flowchart LR
-    A["Bit thông tin"] --> B["Mã hóa Turbo"]
-    B --> C["Ánh xạ Gray 64-QAM"]
-    C --> D["Hai luồng phát · IFFT · Chèn CP"]
-    D --> E["Kênh Rayleigh đa đường + AWGN"]
-    E --> F["Hai anten thu · Bỏ CP · FFT"]
-    F --> G["Cân bằng ZF hoặc MMSE"]
-    G --> H["Giải điều chế mềm · LLR Max-Log"]
-    H --> I["Giải mã Turbo · Đếm lỗi bit"]
-```
+![Sơ đồ hệ thống MIMO-OFDM với mã Turbo](docs/images/turbo.jpg)
 
 | Tham số | Giá trị trong mã hiện tại |
 | --- | --- |

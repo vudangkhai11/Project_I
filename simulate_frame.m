@@ -6,6 +6,7 @@ infoBits = randi([0 1], cfg.K_info, 1);
 codedBits = turbo_stage('encode', infoBits, pi);
 bitsFrame = [codedBits; zeros(cfg.bits_pad, 1)];
 txSymsAll = qam16_stage('mod', bitsFrame);
+
 totalSyms = numel(txSymsAll);
 rxSymsAll = zeros(totalSyms, 1);
 noiseVarAll = zeros(totalSyms, 1);
