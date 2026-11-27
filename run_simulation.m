@@ -10,7 +10,7 @@ results.BER_post = zeros(numel(cfg.snr_db), numel(cfg.iter_list));
 
 fprintf('OFDM: %d subcarriers, CP=%d, nTx=nRx=2, L=%d\n', cfg.N, cfg.CP, cfg.L);
 fprintf('Turbo: K=%d, Ncoded=%d, Ns_used=%d/%d QAM symbols\n\n', ...
-    cfg.K_info, cfg.Ncoded, cfg.Ns_used, cfg.sym_per_ofdm);
+    cfg.K_info, cfg.Ncoded, cfg.Ns_used, cfg.sym_per_ofdm * cfg.N_ofdm);
 for iSNR = 1:numel(cfg.snr_db)
     snrDb = cfg.snr_db(iSNR);
     snrLin = 10^(snrDb / 10);

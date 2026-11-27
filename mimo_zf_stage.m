@@ -15,7 +15,7 @@ switch lower(action)
         noiseEnh = zeros(cfg.N, cfg.nTx);
 
         for k = 1:cfg.N
-            Hk = squeeze(Hfreq(k, :, :)); % Ma tran kenh tai song mang k
+            Hk = squeeze(Hfreq(k, :, :));
 
             if strcmp(eqType, 'mmse')
                 % Can bang MMSE: W = inv(H'*H + (1/SNR)*I) * H'
@@ -25,7 +25,9 @@ switch lower(action)
                 for tx = 1:cfg.nTx
                     mu = real(WH(tx, tx));
                     rxSyms(k, tx) = (W(tx, :) * rxFreq(k, :).') / mu;
-                    noiseEnh(k, tx) = norm(W(tx, :))^2 / (mu^2);
+                    % Tinh du ca nhieu Gaussian va can nhieu du giua cac luong
+                    interf = max(0, sum(abs(WH(tx, :)).^2) - mu^2);
+                    noiseEnh(k, tx) = (norm(W(tx, :))^2 + snrLin * interf) / (mu^2);
                 end
             else
                 % Can bang ZF truyen thong

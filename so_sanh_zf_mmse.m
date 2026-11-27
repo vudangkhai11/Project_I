@@ -1,18 +1,19 @@
 clear; clc; close all;
 cfg = config_params();
-cfg.N_sym = 2000;               % 800 frame chạy mất khoảng 1 phút
-cfg.snr_db = 4:2:18;           % Dải SNR
-cfg.iter_list = 6;             % Dùng mốc 6 vòng lặp tối ưu vừa tìm được
+cfg.N_sym = 2000;
+cfg.snr_db = 4:1:16;
+cfg.iter_list = 6;
 
-rng(cfg.seed);
-pi = randperm(cfg.K_info).';
+% Block interleaver 32x32 cho khung Turbo 1024 bit.
+matIdx = reshape(1:cfg.K_info, 32, 32);
+pi = reshape(matIdx.', [], 1);
 invpi = zeros(cfg.K_info, 1);
 invpi(pi) = (1:cfg.K_info).';
 
 ber_zf = zeros(numel(cfg.snr_db), 1);
 ber_mmse = zeros(numel(cfg.snr_db), 1);
 
-fprintf('--- DANG CHAY SO SANH ZF VS MMSE (64-QAM, Turbo 6 iters) ---\n');
+fprintf('--- DANG CHAY CO DINH %d FRAMES (64-QAM, K=%d, Block Interleaver) ---\n', cfg.N_sym, cfg.K_info);
 for iSNR = 1:numel(cfg.snr_db)
     snrDb = cfg.snr_db(iSNR);
     snrLin = 10^(snrDb / 10);
@@ -28,21 +29,25 @@ for iSNR = 1:numel(cfg.snr_db)
     end
     ber_zf(iSNR)   = err_zf / tot;
     ber_mmse(iSNR) = err_mmse / tot;
-    fprintf('SNR = %2d dB | BER_ZF = %.3e | BER_MMSE = %.3e\n', snrDb, ber_zf(iSNR), ber_mmse(iSNR));
+    fprintf('SNR = %2d dB | BER_ZF = %.3e | BER_MMSE = %.3e\n', ...
+        snrDb, ber_zf(iSNR), ber_mmse(iSNR));
 end
 
 % Vẽ đồ thị so sánh ZF vs MMSE
 figure('Color', 'w', 'Position', [100, 100, 750, 480]);
-semilogy(cfg.snr_db, ber_zf, 'r-o', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'ZF Equalizer');
+semilogy(cfg.snr_db, ber_zf, 'r-o', 'LineWidth', 2, 'MarkerFaceColor', 'r', 'DisplayName', 'ZF Equalizer (Turbo 6 iters)');
 hold on;
-semilogy(cfg.snr_db, ber_mmse, 'b-s', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'MMSE Equalizer');
+semilogy(cfg.snr_db, ber_mmse, 'b-s', 'LineWidth', 2, 'MarkerFaceColor', 'b', 'DisplayName', 'MMSE Equalizer (Turbo 6 iters)');
 grid on; grid minor;
 xlim([4 16]);
-ylim([1e-5 1]);
+ylim([1e-6 1]);
 xlabel('SNR (dB)', 'FontSize', 12);
 ylabel('Tỉ lệ lỗi bit (BER)', 'FontSize', 12);
-title('So sánh hiệu năng cân bằng ZF vs MMSE (2x2 MIMO-OFDM, 64-QAM, Turbo 6 vòng)', 'FontSize', 13);
-legend('Location', 'southwest', 'FontSize', 11);
+title('So sánh ZF và MMSE (2×2 MIMO-OFDM, 64-QAM, Turbo 6 vòng)', 'FontSize', 11);
+legend('Location', 'southwest', 'FontSize', 10);
 
-exportgraphics(gcf, 'so_sanh_zf_mmse.png', 'Resolution', 300);
-fprintf('\nDa luu anh thanh cong: so_sanh_zf_mmse.png!\n');
+if ~exist('docs/images', 'dir')
+    mkdir('docs/images');
+end
+exportgraphics(gcf, 'docs/images/so_sanh_zf_mmse_2000frame.png', 'Resolution', 300);
+fprintf('\nDa luu anh thanh cong: docs/images/so_sanh_zf_mmse_2000frame.png!\n');

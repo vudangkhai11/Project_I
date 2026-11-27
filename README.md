@@ -1,144 +1,114 @@
-# Đồ án I: Mô phỏng hệ thống 2x2 MIMO-OFDM sử dụng mã Turbo và điều chế 64-QAM
+# Đồ án I — Mô phỏng MIMO-OFDM 2×2 với mã Turbo và 64-QAM
 
-## 1. Mục tiêu
+Dự án MATLAB mô phỏng truyền hai luồng dữ liệu qua kênh Rayleigh đa đường với nhiễu cộng Gaussian trắng (AWGN). Ba thí nghiệm khảo sát tỉ lệ lỗi bit (BER) theo SNR, mức giảm BER khi tăng số vòng giải mã Turbo và sự khác biệt giữa hai bộ cân bằng Zero-Forcing (ZF) và Minimum Mean Square Error (MMSE).
 
-Mục tiêu của đồ án là nghiên cứu, thiết kế và mô phỏng đánh giá hiệu năng hệ thống 2×2 MIMO-OFDM kết hợp kỹ thuật mã hóa kênh Turbo và điều chế bậc cao 64-QAM trên kênh truyền fading Rayleigh đa đường. Đồ án tập trung giải quyết các bài toán trọng tâm:
-- Khảo sát hiệu năng sửa lỗi của mã Turbo qua các mức SNR khác nhau so với hệ thống không mã hóa.
-- Thực nghiệm tìm kiếm **giới hạn hội tụ tối ưu** của số vòng lặp giải mã Turbo.
-- Đánh giá và so sánh hiệu năng giữa hai kỹ thuật tách tín hiệu / cân bằng MIMO: **Zero-Forcing (ZF)** và **Minimum Mean Square Error (MMSE)**.
+## Chạy mô phỏng
 
----
+Dùng **MATLAB R2020a trở lên** để chạy cả ba script, vì hai script khảo sát dùng hàm xuất ảnh từ phiên bản này. Mã nguồn sử dụng các hàm MATLAB cơ bản, không yêu cầu Communications Toolbox. [Tài liệu MathWorks về exportgraphics](https://www.mathworks.com/help/matlab/ref/exportgraphics.html)
 
-## 2. Sơ đồ hệ thống
+Chọn thư mục chứa [main.m](main.m) làm **Current Folder** trong MATLAB. Chạy từng lệnh dưới đây trong Command Window tùy theo thí nghiệm cần thực hiện.
 
-Sơ đồ khối tổng quát của hệ thống 2×2 MIMO-OFDM:
+| Lệnh | Cân bằng | SNR | Khung mỗi mức SNR | Số vòng Turbo | Bộ đan xen |
+| --- | --- | --- | ---: | --- | --- |
+| [main](main.m) | ZF | 5–15 dB, bước 1 dB | 500 | 2, 6, 8 | Hoán vị ngẫu nhiên, seed 2026 |
+| [tim_gioi_han_vong_lap](tim_gioi_han_vong_lap.m) | ZF | 12 dB | 2.000 | 1–10 | Hoán vị ngẫu nhiên, seed 2026 |
+| [so_sanh_zf_mmse](so_sanh_zf_mmse.m) | ZF và MMSE | 4–16 dB, bước 1 dB | 2.000 cho mỗi bộ cân bằng | 6 | Đan xen khối 32×32, script không đặt seed |
 
-![Sơ đồ khối hệ thống MIMO-OFDM](docs/images/turbo.jpg)
+Cả ba lệnh đều in BER ra Command Window và mở đồ thị. Trong Workspace, [main](main.m) trả kết quả qua `results.BER_post` và `results.BER_th`, với hàng tương ứng từng mức SNR và cột của `BER_post` tương ứng từng mốc vòng lặp. Hai script khảo sát lưu kết quả vào `ber_iters` hoặc `ber_zf` và `ber_mmse`. Chúng cũng xuất ảnh lần lượt ra `gioi_han_vong_lap.png` ở thư mục hiện hành và `docs/images/so_sanh_zf_mmse_2000frame.png`. Chạy lại có thể ghi đè ảnh tại các đường dẫn xuất.
 
-*Hình 1. Sơ đồ khối hệ thống MIMO-OFDM 2×2 sử dụng điều chế 64-QAM, mã Turbo và cân bằng ZF/MMSE.*
+Lệnh chạy thử dưới đây dùng 5 khung tại 12 dB để kiểm tra luồng xử lý trước khi chạy toàn bộ dải SNR.
 
----
+```matlab
+cfg = config_params();
+cfg.snr_db = 12;
+cfg.N_sym = 5;
+cfg.iter_list = 2;
+cfg.Ntheory = 1000;
+results = run_simulation(cfg);
+disp(results.BER_post);
+```
 
-## 3. Mô hình hệ thống
+## Mô hình hệ thống
 
-Hệ thống mô phỏng gồm hai anten phát và hai anten thu ($2\times 2$ MIMO), kết hợp với kỹ thuật ghép kênh phân chia theo tần số trực giao (OFDM) với $N = 64$ sóng mang con.
+```mermaid
+flowchart LR
+    A["Bit thông tin"] --> B["Mã hóa Turbo"]
+    B --> C["Ánh xạ Gray 64-QAM"]
+    C --> D["Hai luồng phát · IFFT · Chèn CP"]
+    D --> E["Kênh Rayleigh đa đường + AWGN"]
+    E --> F["Hai anten thu · Bỏ CP · FFT"]
+    F --> G["Cân bằng ZF hoặc MMSE"]
+    G --> H["Giải điều chế mềm · LLR Max-Log"]
+    H --> I["Giải mã Turbo · Đếm lỗi bit"]
+```
 
-1. **Phát tín hiệu:**
-   - Chuỗi bit thông tin được mã hóa Turbo rate $\approx 1/3$.
-   - Dữ liệu được điều chế **64-QAM** theo mã Gray (6 bit/symbol) với hệ số chuẩn hóa công suất trung bình bằng 1 là $1/\sqrt{42}$.
-   - Tín hiệu được chuyển sang miền thời gian qua biến đổi IFFT 64 điểm và chèn tiền tố chu kỳ (CP) dài 16 mẫu trước khi truyền qua anten phát.
+| Tham số | Giá trị trong mã hiện tại |
+| --- | --- |
+| Anten phát × anten thu | 2 × 2, hai luồng ghép kênh không gian |
+| Sóng mang con / kích thước FFT | 64 |
+| Tiền tố chu kỳ (CP) | 16 mẫu |
+| Kênh truyền | 10 tap Rayleigh độc lập trên mỗi cặp anten phát–thu, công suất trung bình mỗi tap là $1/10$ |
+| Điều chế | 64-QAM Gray, 6 bit/ký hiệu, chuẩn hóa chòm sao bằng $1/\sqrt{42}$ |
+| Một khung Turbo | 1.024 bit thông tin → 3.072 bit mã hóa → 512 ký hiệu QAM |
+| Dung lượng truyền mỗi khung | 4 ký hiệu OFDM × 64 sóng mang × 2 anten × 6 bit = 3.072 bit. Cấu hình này dùng 0 bit đệm. |
 
-2. **Kênh truyền:**
-   - Kênh truyền giữa mỗi cặp anten phát - thu là kênh Rayleigh đa đường chọn lọc tần số gồm $L = 10$ tap độc lập, công suất chuẩn hóa.
-   - Nhiễu cộng Gaussian trắng (AWGN) phức được cộng vào tín hiệu thu theo mức SNR khảo sát.
+**Mã Turbo.** Hai bộ mã tích chập đệ quy hệ thống (RSC) có 8 trạng thái, với đa thức phản hồi 13 và đa thức tạo parity 15 trong hệ bát phân. Bộ thứ nhất mã hóa chuỗi bit gốc, bộ thứ hai mã hóa chuỗi đã đan xen. Khung mã gồm chuỗi bit hệ thống và hai chuỗi parity, cho tốc độ mã $R = 1/3$ và không có bit kết thúc trellis. Bộ giải mã BCJR dạng Max-Log-MAP trao đổi thông tin ngoại lai giữa hai bộ giải mã thành phần. LLR dương nghiêng về bit 0 và LLR âm nghiêng về bit 1.
 
-3. **Thu tín hiệu và Cân bằng:**
-   - Sau khi loại bỏ CP và biến đổi FFT 64 điểm, tín hiệu trên từng sóng mang con thứ $k$ được biểu diễn:
-     $$\mathbf{y}[k] = \mathbf{H}[k]\mathbf{x}[k] + \mathbf{n}[k]$$
-   - Bộ thu giả định biết chính xác ma trận kênh (CSI hoàn hảo) và áp dụng một trong hai kỹ thuật cân bằng trên từng sóng mang con:
-     - **Cân bằng Zero-Forcing (ZF):** 
-       $$\mathbf{W}_{\text{ZF}}[k] = (\mathbf{H}^H[k]\mathbf{H}[k])^{-1}\mathbf{H}^H[k]$$
-     - **Cân bằng MMSE:** 
-       $$\mathbf{W}_{\text{MMSE}}[k] = \left(\mathbf{H}^H[k]\mathbf{H}[k] + \frac{1}{\text{SNR}}\mathbf{I}\right)^{-1}\mathbf{H}^H[k]$$
-   - Tín hiệu sau cân bằng được tính toán phương sai nhiễu tương đương và đưa vào bộ giải điều chế mềm tính Soft-LLR Max-Log cho 64 điểm chòm sao trước khi giải mã Turbo lặp.
+**Kênh và quy ước SNR.** Mô phỏng lấy mẫu lại kênh ở mỗi ký hiệu OFDM và giả định bộ thu biết chính xác đáp ứng kênh trên từng sóng mang (CSI hoàn hảo). Tín hiệu phát được chia cho $\sqrt{n_\mathrm{Tx}}$ trước IFFT. Phương sai AWGN phức trong miền thời gian bằng công suất mẫu phát trung bình trên các anten, tính cả CP, chia cho $\rho = 10^{\mathrm{SNR}_{\mathrm{dB}}/10}$. Trục SNR của đồ thị dùng trực tiếp tham số này.
 
----
+**Cân bằng và giải điều chế.** Với $\mathbf H_k$ là ma trận kênh trên sóng mang $k$, hai bộ cân bằng dùng trọng số sau.
 
-## 4. Mã hóa và Giải mã Turbo
+$$
+\mathbf W_{\mathrm{ZF},k}=(\mathbf H_k^H\mathbf H_k)^{-1}\mathbf H_k^H
+\qquad
+\mathbf W_{\mathrm{MMSE},k}=(\mathbf H_k^H\mathbf H_k+\rho^{-1}\mathbf I)^{-1}\mathbf H_k^H
+$$
 
-### 4.1. Bộ mã hóa Turbo (RSC 13/15)
-Bộ mã hóa gồm hai bộ mã tích chập đệ quy hệ thống (RSC) giống nhau với đa thức sinh $(13, 15)_8$ và bộ nhớ 3 (8 trạng thái):
-- Bộ mã thứ nhất mã hóa trực tiếp chuỗi bit thông tin gốc $u$.
-- Bộ mã thứ hai mã hóa chuỗi bit sau khi qua bộ đan xen ngẫu nhiên (Interleaver $\pi$).
-- Đầu ra gồm chuỗi bit hệ thống và hai chuỗi parity, cho tốc độ mã $R \approx 1/3$. Với $K_{\text{info}} = 256$ bit, bộ mã tạo ra đúng $256 \times 3 = 768$ bit mã hóa. Số bit này vừa khít $100\%$ dung lượng của một ký hiệu OFDM trên 2 anten ($64 \times 2 \times 6 = 768$ bit), không cần chèn thêm bit 0 padding.
+ZF triệt can nhiễu giữa các luồng khi ma trận kênh có hạng đầy đủ, nhưng có thể khuếch đại nhiễu mạnh khi kênh gần suy biến. MMSE dùng hạng tử điều chuẩn $\rho^{-1}\mathbf I$ để hạn chế khuếch đại nhiễu. Nhánh MMSE còn hiệu chỉnh độ lợi của từng luồng và tính cả can nhiễu dư vào phương sai tương đương mà bộ giải điều chế mềm dùng để tính LLR.
 
-### 4.2. Bộ giải mã Turbo (Max-Log-MAP BCJR)
-- Bộ giải mã lặp dựa trên thuật toán BCJR dạng Max-Log-MAP, quy ước dấu LLR:
-  $$L(b) = \ln \frac{P(b=0 \mid y)}{P(b=1 \mid y)}$$
-- Hai decoder trao đổi thông tin ngoại lai (Extrinsic Information $L_e = L_{\text{post}} - L_{\text{sys}} - L_a$) qua từng vòng lặp để cập nhật độ tin cậy tiên nghiệm cho nhau.
-- Quyết định cứng sau vòng lặp cuối cùng được tính: $\hat{u} = (L_{\text{final}} < 0)$.
+## Cách đọc kết quả BER
 
----
+BER sau giải mã bằng tổng số bit thông tin giải mã sai chia cho tổng số bit thông tin đã truyền. Mỗi điểm SNR của [main](main.m) dùng 512.000 bit thông tin. Phép so sánh ZF/MMSE dùng 2.048.000 bit cho mỗi phương pháp tại mỗi mức SNR. Hai phương pháp dùng cùng cấu hình và bộ đan xen, với các mẫu bit, kênh và nhiễu được sinh riêng cho từng nhánh.
 
-## 5. Tham số mô phỏng
+Đường `Uncoded ZF theory` trong đồ thị của [main](main.m) là mốc tham chiếu. Chương trình lấy trung bình công thức BER xấp xỉ của 64-QAM trên 200.000 mẫu ma trận kênh Rayleigh 2×2. Các đường Turbo được tính từ lỗi bit đo trực tiếp qua chuỗi mô phỏng theo khung.
 
-Toàn bộ tham số hệ thống được khai báo tập trung trong [`config_params.m`](config_params.m):
+### Số vòng giải mã Turbo
 
-| Tham số | Giá trị | Ý nghĩa |
-|---|---:|---|
-| Số anten phát / thu ($n_{\text{Tx}} \times n_{\text{Rx}}$) | $2 \times 2$ | Cấu hình MIMO không gian |
-| Số sóng mang con OFDM ($N$) | 64 | Kích thước biến đổi FFT / IFFT |
-| Độ dài tiền tố chu kỳ ($\text{CP}$) | 16 | Ngăn ngừa nhiễu xuyên ký hiệu (ISI) |
-| Số tap kênh Rayleigh ($L$) | 10 | Độ dài kênh chọn lọc tần số ($L \le \text{CP}$) |
-| Bậc điều chế ($M$) | 64 | 64-QAM (6 bit/symbol) |
-| Chuẩn hóa công suất | $1/\sqrt{42}$ | Chuẩn hóa năng lượng ký hiệu 64-QAM |
-| Số bit thông tin mỗi khung ($K_{\text{info}}$) | 256 | Số bit đầu vào bộ mã Turbo |
-| Số bit mã hóa mỗi khung ($N_{\text{coded}}$) | 768 | Vừa khít dung lượng 1 frame OFDM |
-| Dải SNR khảo sát | 4:2:24 dB | Bước nhảy 2 dB |
-| Số khung mô phỏng mỗi mức SNR ($N_{\text{sym}}$) | 2000 | Tương đương $> 512.000$ bit/mức SNR |
-| Seed ngẫu nhiên | 2026 | Tái lập chính xác kết quả mô phỏng |
+![BER theo số vòng giải mã Turbo tại SNR 12 dB](docs/images/gioi_han_vong_lap.png)
 
----
+*Hình 1. Kết quả lưu từ cấu hình ban đầu với khung 256 bit. Script khảo sát hiện dùng khung 1.024 bit.*
 
-## 6. Cấu trúc chương trình
+BER giảm từ khoảng 2,25% ở vòng 1 xuống 0,39% ở vòng 4, rồi giảm chậm hơn. Phép so sánh ZF/MMSE đặt cố định 6 vòng cho cả hai bộ cân bằng. Có thể đo lại đường BER theo số vòng lặp cho khung 1.024 bit bằng [tim_gioi_han_vong_lap](tim_gioi_han_vong_lap.m).
 
-Dự án được tổ chức theo kiến trúc phân tầng (Modular Design):
+### So sánh ZF và MMSE
 
-| File / Thư mục | Chức năng |
-|---|---|
-| [`main.m`](main.m) | Điểm chạy chính: nạp cấu hình, chạy sweep SNR và vẽ đồ thị BER. |
-| [`config_params.m`](config_params.m) | Khai báo toàn bộ tham số mô phỏng hệ thống. |
-| [`simulate_frame.m`](simulate_frame.m) | Xử lý một khung truyền nhận: phát 64-QAM $\to$ OFDM $\to$ Kênh $\to$ ZF/MMSE $\to$ Turbo decode. |
-| [`turbo_stage.m`](turbo_stage.m) | Mã hóa Turbo rate 1/3 và giải mã lặp BCJR Max-Log-MAP. |
-| [`qam16_stage.m`](qam16_stage.m) | Điều chế 64-QAM Gray mapping và tính Soft-LLR Max-Log 64 điểm. |
-| [`mimo_zf_stage.m`](mimo_zf_stage.m) | Cân bằng MIMO đa sóng mang hỗ trợ cả **ZF** và **MMSE**. |
-| [`ofdm_stage.m`](ofdm_stage.m) | Biến đổi IFFT/FFT và thêm/bỏ tiền tố chu kỳ CP. |
-| [`channel_stage.m`](channel_stage.m) | Kênh fading Rayleigh 10 tap đa đường và cộng nhiễu AWGN. |
-| [`analysis_stage.m`](analysis_stage.m) | Tính đường lý thuyết giải tích ZF 64-QAM và vẽ đồ thị BER. |
-| [`tim_gioi_han_vong_lap.m`](tim_gioi_han_vong_lap.m) | Script khảo sát tìm giới hạn hội tụ của số vòng lặp Turbo (1 - 10 vòng). |
-| [`so_sanh_zf_mmse.m`](so_sanh_zf_mmse.m) | Script mô phỏng so sánh trực tiếp hiệu năng giữa ZF và MMSE. |
-| `docs/images/` | Chứa sơ đồ khối hệ thống và các đồ thị kết quả mô phỏng. |
+![BER của ZF và MMSE trên dải SNR từ 4 đến 16 dB](docs/images/so_sanh_zf_mmse_goc.png)
 
----
+*Hình 2. Kết quả đã lưu cho 64-QAM, khung Turbo 1.024 bit, bộ đan xen khối 32×32 và 6 vòng giải mã.*
 
-## 7. Kết quả mô phỏng và Đánh giá
+Trong lần chạy được minh họa, MMSE cho BER thấp hơn ZF tại cả 13 mức SNR. Tại 11 dB, BER của MMSE khoảng $8{,}5\times10^{-5}$, thấp hơn khoảng 10 lần so với ZF ($8{,}6\times10^{-4}$). BER giảm mạnh trong khoảng 8–12 dB, tương ứng với vùng *waterfall*. Ở 16 dB, BER đã xuống mức khoảng $10^{-5}$, tương ứng với số bit lỗi ít trên 2.048.000 bit. Cần thêm số liệu ở vùng SNR cao để xác định có sàn lỗi (*error floor*) hay không.
 
-### 7.1. Khảo sát giới hạn hội tụ của số vòng lặp giải mã Turbo
+## Cấu trúc mã nguồn
 
-Để xác định số vòng lặp giải mã tối ưu nhằm cân bằng giữa hiệu năng BER và độ trễ tính toán, hệ thống được khảo sát từ **1 đến 10 vòng lặp** tại mức $\text{SNR} = 12\text{ dB}$ (vùng thác đổ):
+| Tệp | Vai trò |
+| --- | --- |
+| [main.m](main.m) | Nạp cấu hình, chạy mô phỏng theo SNR và vẽ BER. |
+| [config_params.m](config_params.m) | Khai báo tham số mặc định và tính dung lượng khung, số bit mã hóa, bit đệm. |
+| [run_simulation.m](run_simulation.m) | Khởi tạo seed và bộ đan xen, chạy các khung ZF và tổng hợp BER theo SNR. |
+| [simulate_frame.m](simulate_frame.m) | Điều phối chuỗi phát–thu cho một khung Turbo và đếm lỗi tại từng mốc vòng lặp. |
+| [turbo_stage.m](turbo_stage.m) | Mã hóa RSC và giải mã Turbo bằng BCJR Max-Log-MAP. |
+| [qam16_stage.m](qam16_stage.m) | Ánh xạ Gray và tính LLR cho 64-QAM. Tên tệp được giữ từ phiên bản 16-QAM. |
+| [ofdm_stage.m](ofdm_stage.m) | IFFT, FFT và chèn hoặc bỏ tiền tố chu kỳ. |
+| [channel_stage.m](channel_stage.m) | Sinh kênh Rayleigh, chập tín hiệu theo từng cặp anten và cộng AWGN. |
+| [mimo_zf_stage.m](mimo_zf_stage.m) | Cân bằng ZF hoặc MMSE theo sóng mang và tính hệ số dùng cho phương sai nhiễu tương đương. |
+| [analysis_stage.m](analysis_stage.m) | Tính BER tham chiếu cho ZF không mã hóa và vẽ đồ thị của chương trình chính. |
+| [tim_gioi_han_vong_lap.m](tim_gioi_han_vong_lap.m) | Đo BER theo số vòng giải mã tại SNR cố định. |
+| [so_sanh_zf_mmse.m](so_sanh_zf_mmse.m) | So sánh BER giữa hai phương pháp cân bằng. |
+| [docs/images/](docs/images/) | Chứa các hình minh họa và kết quả mô phỏng đã lưu. |
 
-![Khảo sát giới hạn hội tụ Turbo](docs/images/gioi_han_vong_lap.png)
+Khi tùy chỉnh phép chạy, có thể đặt lại `cfg.snr_db`, `cfg.N_sym` và `cfg.iter_list` sau khi gọi `config_params()`. Đồ thị của chương trình chính có sẵn ba kiểu đường cho tối đa ba mốc vòng lặp. Hai script khảo sát tự đặt lại các tham số tương ứng như trong bảng lệnh. Mô hình hiện được triển khai cho MIMO 2×2 và 64-QAM. Khi đổi độ dài khung, cần cập nhật các tham số dẫn xuất trong [config_params.m](config_params.m) và kích thước bộ đan xen khối trong [so_sanh_zf_mmse.m](so_sanh_zf_mmse.m).
 
-*Hình 2. Đồ thị khảo sát BER theo số vòng lặp giải mã Turbo tại SNR = 12 dB (64-QAM).*
+## Hướng phát triển
 
-**Nhận xét:**
-- **Từ vòng 1 đến vòng 4:** BER giảm rất dốc (từ $2.25\%$ ở vòng 1 rơi xuống $0.39\%$ ở vòng 4 — giảm gần 6 lần). Đây là giai đoạn các decoder thành phần trao đổi thông tin ngoại lai hiệu quả nhất.
-- **Từ vòng 5–6 trở đi:** Đường BER đi ngang và đạt trạng thái **bão hòa** quanh mức $\approx 0.25\% - 0.3\%$. Tăng lên 8 hay 10 vòng tốn thêm nhiều thời gian tính toán nhưng không giảm thêm lỗi.
-- **Kết luận:** **6 vòng lặp** là giới hạn hội tụ tối ưu của bộ giải mã Turbo trong hệ thống này.
-
----
-
-### 7.2. So sánh hiệu năng cân bằng Zero-Forcing (ZF) và MMSE
-
-So sánh hiệu năng giữa bộ cân bằng ZF và MMSE trên cùng hệ thống 64-QAM, Turbo 6 vòng lặp với 2000 frame:
-
-![So sánh ZF vs MMSE](docs/images/so_sanh_zf_mmse_2000frame.png)
-
-*Hình 3. So sánh hiệu năng BER giữa bộ cân bằng ZF và MMSE (2×2 MIMO-OFDM, 64-QAM, Turbo 6 vòng).*
-
-**Nhận xét chuyên sâu:**
-1. **Ở dải SNR thấp và trung bình (4 – 12 dB):**
-   - **MMSE vượt trội hơn hẳn so với ZF**, mang lại độ lợi khoảng $\sim 1\text{ dB}$.
-   - Tại $\text{SNR} = 12\text{ dB}$, BER của MMSE ($2.1 \times 10^{-3}$) giảm hơn một nửa so với ZF ($4.7 \times 10^{-3}$).
-   - *Nguyên nhân:* ZF cố gắng triệt tiêu hoàn toàn can nhiễu nên bị hiện tượng **khuếch đại nhiễu (noise enhancement)** mạnh khi ma trận kênh bị suy biến sâu. Trong khi đó, MMSE bổ sung thành phần điều hòa $\frac{1}{\text{SNR}}\mathbf{I}$ giúp cân bằng tối ưu giữa việc giảm can nhiễu và hạn chế khuếch đại nhiễu Gaussian.
-2. **Ở dải SNR cao (> 13 dB):**
-   - Khi công suất nhiễu Gaussian trở nên không đáng kể, can nhiễu giữa các luồng anten trở thành yếu tố chi phối. ZF triệt tiêu sạch $100\%$ can nhiễu đa luồng ($\mathbf{W}_{\text{ZF}}\mathbf{H} = \mathbf{I}$), trong khi MMSE vẫn để lại một lượng can nhiễu dư nhỏ. Do đó, đường ZF dốc sạch lỗi nhanh hơn.
-   - Khi $\text{SNR} \to \infty$, thành phần $\frac{1}{\text{SNR}}\mathbf{I} \to 0$, bộ cân bằng MMSE hội tụ hoàn toàn về đáp ứng của ZF.
-
----
-
-## 8. Hướng phát triển tiếp theo
-
-- **Dạng sóng OTFS (Orthogonal Time Frequency Space):** Nghiên cứu thay thế khối OFDM bằng OTFS trên miền trễ - Doppler (Delay-Doppler) để khắc phục hiện tượng dịch Doppler cao trong các kịch bản di động tốc độ cao.
-- **Dạng sóng AFDM (Affine Frequency Division Multiplexing):** Nghiên cứu biến đổi Affine Fourier rời rạc (DAFT) để đạt phân tập tối đa với độ phức tạp thấp.
-- **Ước lượng kênh thực tế:** Mở rộng từ giả định kênh hoàn hảo (CSI) sang mô hình ước lượng kênh sử dụng Pilot và nội suy kênh 2D.
+- Khảo sát các dạng sóng OTFS và AFDM trong kênh có dịch Doppler.
+- Bổ sung pilot và nội suy theo thời gian–tần số để đánh giá ảnh hưởng của sai số ước lượng kênh.
